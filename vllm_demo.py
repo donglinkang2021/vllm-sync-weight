@@ -1,12 +1,9 @@
+import hydra
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from omegaconf import DictConfig, OmegaConf
 from vllm_client import VLLMClient
 
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Math-1.5B-Instruct")
-
-client = VLLMClient()
-client.init_communicator()
-
-def generate_text():
+def generate_text(client:VLLMClient, tokenizer: AutoTokenizer):
     """Generate text using the VLLM client."""
     # Generate completions
     output = client.generate(
@@ -20,12 +17,36 @@ def generate_text():
         text = tokenizer.decode(completion_ids, skip_special_tokens=True)
         print("Generated text:", text)
 
-generate_text()
+@hydra.main(version_base=None, config_path="conf", config_name="client")
+def main(cfg: DictConfig) -> None:
 
-# Update model weights
-model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct").to("cuda")
-client.update_model_params(model)
+    client = VLLMClient(**cfg)
+    client.init_communicator()
 
-generate_text()
+    # Update model weights
+    model0 = AutoModelForCausalLM.from_pretrained(
+        "Qwen/Qwen2.5-1.5B", dtype="bfloat16"
+    ).to("cuda:0")
+    tokenizer0 = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B")
+    model1 = AutoModelForCausalLM.from_pretrained(
+        "Qwen/Qwen2.5-Math-1.5B", dtype="bfloat16"
+    ).to("cuda:0")
+    tokenizer1 = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Math-1.5B")
+    model2 = AutoModelForCausalLM.from_pretrained(
+        "Qwen/Qwen2.5-Math-1.5B-Instruct", dtype="bfloat16"
+    ).to("cuda:0")
+    tokenizer2 = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Math-1.5B-Instruct")
+
+    client.update_model_params(model0)
+    generate_text(client, tokenizer0)
+
+    client.update_model_params(model1)
+    generate_text(client, tokenizer1)
+    
+    client.update_model_params(model2)
+    generate_text(client, tokenizer2)
+
+if __name__ == "__main__":
+    main()
 
 # HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 CUDA_VISIBLE_DEVICES=0 python vllm_demo.py

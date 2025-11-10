@@ -1,0 +1,8 @@
+# vLLM Client Configuration
+# Server connection settings
+base_url: null
+host: "0.0.0.0"
+server_port: 8000
+group_port: 51216
+connection_timeout: 0.0
+

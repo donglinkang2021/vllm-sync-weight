@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import base64
 import logging
 import os
@@ -23,6 +22,9 @@ from io import BytesIO
 from itertools import chain
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
+
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 import torch
 import torch.distributed.distributed_c10d as c10d
@@ -381,7 +383,7 @@ def sanitize_logprob(logprob):
 
     return value
 
-
+@hydra.main(version_base=None, config_path="conf", config_name="server")
 def main(script_args: ScriptArguments):
     # Spawn dp workers, and setup pipes for communication
     master_port = get_open_port()
@@ -794,44 +796,5 @@ def main(script_args: ScriptArguments):
     # Start the server
     uvicorn.run(app, host=script_args.host, port=script_args.port, log_level=script_args.log_level)
 
-
-def make_parser():
-    parser = argparse.ArgumentParser(description="Run the vLLM serve script")
-    # Add arguments from ScriptArguments dataclass
-    parser.add_argument("--model", type=str, required=True, help="Model name or path to load the model from.")
-    parser.add_argument("--revision", type=str, default=None, help="Revision to use for the model. If not specified, the default branch will be used.")
-    parser.add_argument("--tensor_parallel_size", type=int, default=1, help="Number of tensor parallel workers to use.")
-    parser.add_argument("--data_parallel_size", type=int, default=1, help="Number of data parallel workers to use.")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address to run the server on.")
-    parser.add_argument("--port", type=int, default=8000, help="Port to run the server on.")
-    parser.add_argument("--gpu_memory_utilization", type=float, default=0.9, help="Ratio (between 0 and 1) of GPU memory to reserve for the model weights, activations, and KV cache.")
-    parser.add_argument("--dtype", type=str, default="auto", help="Data type to use for vLLM generation.")
-    parser.add_argument("--max_model_len", type=int, default=None, help="If set, the `max_model_len` to use for vLLM.")
-    # For boolean flags that should default to None in dataclass, use store_true but we'll convert later
-    parser.add_argument("--enable_prefix_caching", action="store_true", help="Whether to enable prefix caching in vLLM.")
-    parser.add_argument("--enforce_eager", action="store_true", help="Whether to enforce eager execution.")
-    parser.add_argument("--kv_cache_dtype", type=str, default="auto", help="Data type to use for KV cache.")
-    parser.add_argument("--trust_remote_code", action="store_true", help="Whether to trust remote code when loading models.")
-    parser.add_argument("--log_level", type=str, default="info", help="Log level for uvicorn.")
-    parser.add_argument("--vllm_model_impl", type=str, default="vllm", help="Model implementation to use for vLLM.")
-    return parser
-
-
 if __name__ == "__main__":
-    parser = make_parser()
-    args = parser.parse_args()
-    
-    # Convert argparse.Namespace to ScriptArguments dataclass
-    # For boolean flags with action="store_true", they default to False if not provided.
-    # But some dataclass fields expect None as default, so we convert False -> None for those.
-    script_args_dict = vars(args)
-    
-    # enable_prefix_caching should be None if not explicitly set (dataclass default is None)
-    if not script_args_dict.get("enable_prefix_caching"):
-        script_args_dict["enable_prefix_caching"] = None
-    
-    # enforce_eager and trust_remote_code keep their False default from argparse
-    # (which matches their dataclass defaults of False)
-    
-    script_args = ScriptArguments(**script_args_dict)
-    main(script_args)
+    main()
