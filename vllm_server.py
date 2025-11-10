@@ -24,11 +24,9 @@ from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
 
 import torch
 import torch.distributed.distributed_c10d as c10d
-from transformers import is_torch_xpu_available, is_vision_available
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -85,12 +83,8 @@ class WeightSyncWorkerExtension:
         if self.communicator is not None:
             raise RuntimeError("Weight update group already initialized. Call close_communicator first.")
 
-        # TODO: will remove after torch xpu 2.9 support uuid in get_device_properties
-        if torch.cuda.is_available() or (
-            is_torch_xpu_available() and hasattr(torch.xpu.get_device_properties(self.device), "uuid")
-        ):
-            accelerator_module = torch.xpu if is_torch_xpu_available() else torch.cuda
-            if client_device_uuid == str(accelerator_module.get_device_properties(self.device).uuid):
+        if torch.cuda.is_available():
+            if client_device_uuid == str(torch.cuda.get_device_properties(self.device).uuid):
                 raise RuntimeError(
                     f"Attempting to use the same CUDA device (UUID: {client_device_uuid}) for multiple distinct "
                     "roles/ranks within the same communicator. This setup is unsupported and will likely lead to program "
@@ -99,20 +93,10 @@ class WeightSyncWorkerExtension:
         # Get the rank of the current worker in the global world group.
         rank = get_world_group().rank
 
-        if is_torch_xpu_available():
-            store = torch.distributed.TCPStore(host_name=host, port=port, world_size=world_size, is_master=(rank == 0))
-            prefixed_store = c10d.PrefixStore("client2server", store)
-            pg = c10d.ProcessGroupXCCL(
-                store=prefixed_store,
-                rank=rank,
-                size=world_size,
-            )
-            self.communicator = pg
-        else:
-            # Create a stateless process group to manage communication between training processes and vLLM workers.
-            # Initialize the NCCL-based communicator for weight synchronization.
-            pg = StatelessProcessGroup.create(host=host, port=port, rank=rank, world_size=world_size)
-            self.communicator = PyNcclCommunicator(pg, device=self.device)
+        # Create a stateless process group to manage communication between training processes and vLLM workers.
+        # Initialize the NCCL-based communicator for weight synchronization.
+        pg = StatelessProcessGroup.create(host=host, port=port, rank=rank, world_size=world_size)
+        self.communicator = PyNcclCommunicator(pg, device=self.device)
 
         # The client process that sends updated weights has the highest rank (world_size - 1).
         self.client_rank = world_size - 1
@@ -136,14 +120,9 @@ class WeightSyncWorkerExtension:
         # Allocate memory for the incoming weight tensor on the correct device.
         weight = torch.empty(shape, dtype=dtype, device=self.device)
 
-        if is_torch_xpu_available():
-            # Use XCCL to broadcast the updated weights from the client (src) to all workers.
-            self.communicator.broadcast(weight, root=self.client_rank)
-            self.communicator.barrier()
-        else:
-            # Use NCCL to broadcast the updated weights from the client (src) to all workers.
-            self.communicator.broadcast(weight, src=self.client_rank)
-            self.communicator.group.barrier()
+        # Use NCCL to broadcast the updated weights from the client (src) to all workers.
+        self.communicator.broadcast(weight, src=self.client_rank)
+        self.communicator.group.barrier()
 
         # Load the received weights into the model.
         self.model_runner.model.load_weights(weights=[(name, weight)])
