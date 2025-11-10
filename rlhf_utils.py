@@ -15,8 +15,7 @@ def stateless_init_process_group(master_address, master_port, rank, world_size, 
     from vllm.distributed.utils import StatelessProcessGroup
 
     pg = StatelessProcessGroup.create(
-        host=master_address, port=master_port, rank=rank, world_size=world_size
-    )
+        host=master_address, port=master_port, rank=rank, world_size=world_size)
     pynccl = PyNcclCommunicator(pg, device=device)
     return pynccl
 
@@ -31,35 +30,16 @@ class WorkerExtension:
     should pass the full qualified name as `worker_extension_cls` argument.
     """
 
-    def init_weight_update_group(
-        self, master_address, master_port, rank_offset, world_size
-    ):
+    def init_weight_update_group(self, master_address, master_port, rank_offset, world_size):
         from vllm.distributed.parallel_state import get_world_group
-
         rank = get_world_group().rank + rank_offset
         self.model_update_group = stateless_init_process_group(
-            master_address,
-            master_port,
-            rank,
-            world_size,
-            self.device,
-        )
+            master_address, master_port, rank, world_size, self.device)
 
     def update_weight(self, name, dtype, shape):
         weight = torch.empty(shape, dtype=dtype, device="cuda")
         self.model_update_group.broadcast(
-            weight, src=0, stream=torch.cuda.current_stream()
-        )
-
+            weight, src=0, stream=torch.cuda.current_stream())
         self.model_runner.model.load_weights(weights=[(name, weight)])
-
         del weight
 
-    def check_weights_changed(self, train_model):
-        """
-        Check if the weights are updated to training model.
-        """
-        weights_updated = True
-        for name, p in self.model_runner.model.named_parameters():
-            weights_updated = weights_updated and torch.allclose(p, train_model.named_parameters()[name]) 
-        return weights_updated
