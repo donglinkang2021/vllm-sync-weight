@@ -1,7 +1,5 @@
-import hydra
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from omegaconf import DictConfig, OmegaConf
-from vllm_client import VLLMClient
+from vllm_sync import VLLMClient
 
 def generate_text(client:VLLMClient, tokenizer: AutoTokenizer):
     """Generate text using the VLLM client."""
@@ -17,10 +15,8 @@ def generate_text(client:VLLMClient, tokenizer: AutoTokenizer):
         text = tokenizer.decode(completion_ids, skip_special_tokens=True)
         print("Generated text:", text)
 
-@hydra.main(version_base=None, config_path="conf", config_name="client")
-def main(cfg: DictConfig) -> None:
-
-    client = VLLMClient(**cfg)
+def main():
+    client = VLLMClient()
     client.init_communicator()
 
     # Update model weights

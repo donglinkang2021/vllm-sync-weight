@@ -28,7 +28,7 @@ from PIL import Image
 from vllm import SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 
-from api_models import (
+from .api_models import (
     GenerateRequest,
     GenerateResponse,
     ChatRequest,
@@ -36,8 +36,8 @@ from api_models import (
     InitCommunicatorRequest,
     UpdateWeightsRequest,
 )
-from config import ScriptArguments
-from worker import chunk_list
+from .config import ScriptArguments
+from .worker import chunk_list
 
 logger = logging.getLogger(__name__)
 

@@ -27,9 +27,9 @@ from fastapi import FastAPI
 
 from vllm.utils import get_open_port
 
-from config import ScriptArguments
-from worker import llm_worker
-from api_routes import create_router
+from .config import ScriptArguments
+from .worker import llm_worker
+from .api_routes import create_router
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="server")
+@hydra.main(version_base=None, config_path=".", config_name="server")
 def main(script_args: ScriptArguments):
     """
     Main entry point for the vLLM server.
