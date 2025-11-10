@@ -31,6 +31,7 @@ causes unexpected behavior.
 import os
 
 os.environ["VLLM_ALLOW_INSECURE_SERIALIZATION"] = "1"
+os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
 import ray
 import torch
