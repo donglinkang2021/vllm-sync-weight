@@ -1,0 +1,14 @@
+[project]
+name = "vllm-sync-weight"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "nvitop>=1.5.3",
+    "vllm>=0.11.0",
+]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple"
+default = true
