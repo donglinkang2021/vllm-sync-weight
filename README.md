@@ -11,7 +11,7 @@ A server-client architecture is used where the server hosts the vLLM model for i
 Run the following command to start the server(inference/rollout):
 
 ```bash
-HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=1 python -m vllm_sync.server model=Qwen/Qwen2.5-Math-1.5B
+HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=1,2 python -m vllm_sync.server model=Qwen/Qwen2.5-Math-1.5B tensor_parallel_size=2
 ```
 
 Then run the client(training) script:
