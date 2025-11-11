@@ -1,24 +1,30 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import torch
+from vllm.distributed.device_communicators.pynccl import PyNcclCommunicator
+from vllm.distributed.utils import StatelessProcessGroup
 
-
-def stateless_init_process_group(master_address, master_port, rank, world_size, device):
+def get_communicator(
+    master_address: str,
+    master_port: int,
+    rank: int,
+    world_size: int,
+    device: torch.device,
+) -> PyNcclCommunicator:
     """
-    vLLM provides `StatelessProcessGroup` to create a process group
-    without considering the global process group in torch.distributed.
-    It is recommended to create `StatelessProcessGroup`, and then initialize
-    the data-plane communication (NCCL) between external (train processes)
-    and vLLM workers.
-    """
-    from vllm.distributed.device_communicators.pynccl import PyNcclCommunicator
-    from vllm.distributed.utils import StatelessProcessGroup
+    Initialize a stateless process group for distributed communication.
 
+    Args:
+        master_address: The address of the master node.
+        master_port: The port number of the master node.
+        rank: The rank of the current process.
+        world_size: The total number of processes.
+        device: The device (e.g., GPU) to be used for communication.
+
+    Returns:
+        A PyNcclCommunicator for distributed communication.
+    """
     pg = StatelessProcessGroup.create(
-        host=master_address, port=master_port, rank=rank, world_size=world_size)
-    pynccl = PyNcclCommunicator(pg, device=device)
-    return pynccl
-
+        master_address, master_port, rank, world_size)
+    return PyNcclCommunicator(pg, device=device)
 
 class WorkerExtension:
     """
@@ -30,16 +36,20 @@ class WorkerExtension:
     should pass the full qualified name as `worker_extension_cls` argument.
     """
 
-    def init_weight_update_group(self, master_address, master_port, rank_offset, world_size):
+    def init_communicator(self, master_address, master_port, rank_offset, world_size):
         from vllm.distributed.parallel_state import get_world_group
         rank = get_world_group().rank + rank_offset
-        self.model_update_group = stateless_init_process_group(
+        self.communicator = get_communicator(
             master_address, master_port, rank, world_size, self.device)
 
     def update_weight(self, name, dtype, shape):
         weight = torch.empty(shape, dtype=dtype, device="cuda")
-        self.model_update_group.broadcast(
+        self.communicator.broadcast(
             weight, src=0, stream=torch.cuda.current_stream())
         self.model_runner.model.load_weights(weights=[(name, weight)])
         del weight
 
+    def close_communicator(self):
+        if self.communicator is not None:
+            del self.communicator
+            self.communicator = None
