@@ -146,8 +146,18 @@ class Client:
 
 
 # Load the training model
-train_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Math-1.5B-Instruct")
-train_model.to("cuda:0")
+# train_model = AutoModelForCausalLM.from_pretrained(
+#     "Qwen/Qwen2.5-Math-1.5B-Instruct", dtype="float16"
+# ).to("cuda:0")
+model0 = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-1.5B", dtype="float16"
+).to("cuda:0")
+model1 = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-Math-1.5B", dtype="float16"
+).to("cuda:0")
+model2 = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-Math-1.5B-Instruct", dtype="float16"
+).to("cuda:0")
 
 # Create RayLLM with clean API
 llm = RayLLM(
@@ -180,7 +190,29 @@ for output in outputs:
     print(f"Prompt: {prompt!r}\nGenerated text: {generated_text!r}")
     print("-" * 50)
 
-client.update_weight(llm, train_model)
+client.update_weight(llm, model0)
+
+# Generate with updated model
+outputs_updated = llm.generate(prompts, sampling_params)
+print("-" * 50)
+for output in outputs_updated:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}\nGenerated text: {generated_text!r}")
+    print("-" * 50)
+
+client.update_weight(llm, model1)
+
+# Generate with updated model
+outputs_updated = llm.generate(prompts, sampling_params)
+print("-" * 50)
+for output in outputs_updated:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}\nGenerated text: {generated_text!r}")
+    print("-" * 50)
+
+client.update_weight(llm, model2)
 
 # Generate with updated model
 outputs_updated = llm.generate(prompts, sampling_params)
